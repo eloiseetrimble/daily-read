@@ -319,7 +319,22 @@ const TODAY=()=>addDays(new Date(),0);
 const mondayOf=d=>addDays(d,-((d.getDay()+6)%7));
 const dayDiff=(a,b)=>Math.round((a-b)/864e5);
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
-const num=v=>{if(v==null)return null;v=String(v).trim();if(v==="")return null;const n=Number(v.replace(/,/g,""));return isFinite(n)?n:null;};
+const num=v=>{if(v==null)return null;v=String(v).trim();if(v==="")return null;const n=Number(v.replace(/[^0-9.\-]/g,""));return v.replace(/[^0-9]/g,"")===""?null:(isFinite(n)?n:null);};
+const MON={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+function looseDate(v){
+  v=String(v||"").replace(/[\u202f\u00a0]/g," ").trim();if(!v)return null;
+  if(/^\d{4}-\d{2}-\d{2}T/.test(v)){const t=Date.parse(v);return isNaN(t)?null:new Date(t);}
+  if(/^\d{4}-\d{2}-\d{2}$/.test(v)){const [y,m,d]=v.split("-").map(Number);return new Date(y,m-1,d,12);}
+  v=v.replace(/\s+at\s+/i," ");
+  let y,mo,d,rest;let m=v.match(/^([A-Za-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})(.*)$/);
+  if(m){mo=MON[m[1].slice(0,3).toLowerCase()];d=+m[2];y=+m[3];rest=m[4];}
+  else if((m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4}),?(.*)$/))){mo=+m[1]-1;d=+m[2];y=+m[3];if(y<100)y+=2000;rest=m[4];}
+  else{const t=Date.parse(v);return isNaN(t)?null:new Date(t);}
+  if(mo==null||isNaN(mo))return null;
+  let h=0,mi=0,se=0;const tm=(rest||"").match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])?/);
+  if(tm){h=+tm[1];mi=+tm[2];se=+(tm[3]||0);const ap=(tm[4]||"").toLowerCase();if(ap==="pm"&&h<12)h+=12;if(ap==="am"&&h===12)h=0;}
+  return new Date(y,mo,d,h,mi,se);
+}
 const avg=a=>{const b=a.filter(x=>x!=null);return b.length?b.reduce((s,x)=>s+x,0)/b.length:null;};
 const hm=h=>{if(h==null)return "–";const m=Math.round(h*60);return Math.floor(m/60)+"h "+pad(m%60)+"m";};
 const comma=n=>n==null?"–":Math.round(n).toLocaleString();
@@ -344,7 +359,7 @@ function parseCSV(txt){
   const out={races:[],periods:[],days:{},runs:[]};
   const day=k=>out.days[k]||(out.days[k]={});
   const flow=new Set(), sleepSeen=new Set();
-  const dkey=v=>{v=String(v||"").trim();if(/^\d{4}-\d{2}-\d{2}/.test(v))return v.slice(0,10);const t=Date.parse(v);return isNaN(t)?null:ymd(new Date(t));};
+  const dkey=v=>{const d=looseDate(v);return d?ymd(d):null;};
   txt.split(/\r?\n/).forEach(line=>{
     line=line.trim();if(!line)return;
     const f=(line.includes("|")?line.split("|"):line.split(",")).map(x=>x.trim()),t=(f[0]||"").toUpperCase();
@@ -358,8 +373,9 @@ function parseCSV(txt){
       day(k)[(key==="spo2"||key==="cal"||key==="resp")?key:key+src]=val;return;
     }
     if(t==="S"){ /* S|source|startISO|endISO|stage */
-      const st=Date.parse(f[2]),en=Date.parse(f[3]),stage=(f[4]||"").toLowerCase();
-      if(isNaN(st)||isNaN(en)||en<=st||/in ?bed|awake/.test(stage))return;
+      const sd=looseDate(f[2]),ed=looseDate(f[3]),stage=(f[4]||"").toLowerCase();
+      if(!sd||!ed)return;const st=sd.getTime(),en=ed.getTime();
+      if(en<=st||/in ?bed|awake/.test(stage))return;
       const id=f[1]+f[2]+f[3];if(sleepSeen.has(id))return;sleepSeen.add(id);
       const src={ring:"Ring",garmin:"Garmin"}[(f[1]||"").toLowerCase()]||"All";
       const k=ymd(new Date(en)),d=day(k);d["sleep"+src]=(d["sleep"+src]||0)+(en-st)/36e5;return;
