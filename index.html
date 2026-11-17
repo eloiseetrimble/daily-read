@@ -362,7 +362,7 @@ function parseCSV(txt){
   const dkey=v=>{const d=looseDate(v);return d?ymd(d):null;};
   txt.split(/\r?\n/).forEach(line=>{
     line=line.trim();if(!line)return;
-    const f=(line.includes("|")?line.split("|"):line.split(",")).map(x=>x.trim()),t=(f[0]||"").toUpperCase();
+    const f=(line.includes("|")?line.split("|"):line.split(",")).map(x=>x.trim()).filter((x,i)=>i===0||x!==""),t=(f[0]||"").toUpperCase();
     /* shortcut format */
     if(t==="Q"){ /* Q|metric|source|date|value */
       const k=dkey(f[3]),v=num(f[4]);if(!k||v==null)return;
@@ -377,7 +377,7 @@ function parseCSV(txt){
       if(!sd||!ed)return;const st=sd.getTime(),en=ed.getTime();
       if(en<=st||/in ?bed|awake/.test(stage))return;
       const id=f[1]+f[2]+f[3];if(sleepSeen.has(id))return;sleepSeen.add(id);
-      const src={ring:"Ring",garmin:"Garmin"}[(f[1]||"").toLowerCase()]||"All";
+      const sl=(f[1]||"").toLowerCase(),src=sl.includes("ring")?"Ring":sl.includes("garmin")?"Garmin":"All";
       const k=ymd(new Date(en)),d=day(k);d["sleep"+src]=(d["sleep"+src]||0)+(en-st)/36e5;return;
     }
     if(t==="F"){const k=dkey(f[1]);if(k)flow.add(k);return;}
